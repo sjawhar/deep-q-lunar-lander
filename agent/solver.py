@@ -1,5 +1,5 @@
 import numpy as np
-from sklearn.neighbors import KNeighborsRegressor
+from sklearn.linear_model import SGDRegressor
 
 class LunarLanderSolver(object):
     def __init__(self, env, decay, init_episodes, train_episodes, train_rounds):
@@ -10,21 +10,22 @@ class LunarLanderSolver(object):
         self.train_rounds = int(train_rounds)
 
     def solve(self):
-        self.observed = {}
         self.learners = []
-
         for action in range(self.env.action_space.n):
-            self.observed[action] = ([], [])
-            self.learners.append(KNeighborsRegressor(weights='distance', n_jobs=-1))
+            self.learners.append(SGDRegressor(random_state=1, learning_rate='optimal', warm_start=True))
             
         self.epsilon = 0
         self.observe(self.init_episodes, is_decay=False)
         self.train()
         for _ in range(self.train_rounds):
             self.observe(self.train_episodes, is_decay=True)
+            self.train()
             print("Done with training set {}".format(_))
     
     def observe(self, episodes, is_decay):
+        observations = episodes * self.env.spec.max_episode_steps
+        self.observations = np.full((observations, 2 + self.env.observation_space.shape[0]), -1)
+        self.observation = 0
         for _ in range(episodes):
             self.play_game()
             if is_decay == True:
@@ -62,12 +63,15 @@ class LunarLanderSolver(object):
         return best_action
     
     def add_result(self, observation, action, reward):
-        self.observed[action][0].append(observation)
-        self.observed[action][1].append(reward)
+        self.observations[self.observation, :] = np.append(observation, [action, reward])
+        self.observation += 1
         return
     
-    def train(self):       
+    def train(self):
         for action in range(self.env.action_space.n):
-            X, y = self.observed[action]
-            self.learners[action].fit(X, y)
+            action_data = self.observations[self.observations[:, -2] == action]
+            X, y = action_data[:, :-2], action_data[:, -1]
+            if X.shape[0] > 0:
+                print('learning')
+                self.learners[action].partial_fit(X, y)
 
