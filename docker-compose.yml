@@ -1,0 +1,11 @@
+version: '3'
+services:
+  notebook:
+    build: .
+    image: sjawhar/rldm-project-2
+    ports:
+      - "8888:8888"
+    volumes:
+      - "./agent:/home/jovyan"
+    container_name: "rldm-project-2"
+    command: ["start-notebook.sh", "--NotebookApp.token=''"]
