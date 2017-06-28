@@ -20,7 +20,7 @@ class LunarLanderSolver(object):
         for _ in range(self.train_rounds):
             self.observe(self.train_episodes, is_decay=True)
             self.train()
-            print("Done with training set {}".format(_))
+            print("Done with training set {}".format(_ + 1))
     
     def observe(self, episodes, is_decay):
         observations = episodes * self.env.spec.max_episode_steps

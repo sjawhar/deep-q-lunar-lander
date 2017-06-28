@@ -142,3 +142,4 @@ $RECYCLE.BIN/
 .local
 .ipython
 .jupyter
+.bash_history
