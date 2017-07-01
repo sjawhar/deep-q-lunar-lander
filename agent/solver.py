@@ -2,11 +2,24 @@ import numpy as np
 from collections import deque
 
 class LunarLanderSolver(object):
-    def __init__(self, env, learner, decay, gamma, init_episodes, train_episodes, train_size, average, experience):
+    def __init__(
+            self,
+            env,
+            learner,
+            epsilon_decay,
+            min_epsilon,
+            gamma,
+            init_episodes,
+            train_episodes,
+            train_size,
+            average,
+            experience
+    ):
         self.env = env
         self.learner = learner
 
-        self.decay = np.log(decay)
+        self.epsilon_decay = np.log(epsilon_decay)
+        self.min_epsilon = np.log(min_epsilon)
         self.gamma = float(gamma)
         self.init_episodes = int(init_episodes)
         self.train_episodes = int(train_episodes)
@@ -14,7 +27,7 @@ class LunarLanderSolver(object):
         self.episode_rewards = deque([], average)
         self.experience = deque([], experience)
 
-    def solve(self, is_record=False):           
+    def solve(self):           
         self.epsilon = 0
         self.is_fitted = False
         average_reward = 0
@@ -26,7 +39,7 @@ class LunarLanderSolver(object):
             print("Episode {}: Reward: {}, Average reward: {}".format(episode + 1, episode_reward, average_reward))            
 
             if episode >= self.init_episodes:
-                self.epsilon += self.decay
+                self.epsilon = max(self.min_epsilon, self.epsilon + self.epsilon_decay)
                 is_train = True
 
     def play(self, is_train):       
@@ -77,7 +90,7 @@ class LunarLanderSolver(object):
             observations = np.array(observations)
             possibilties = self.get_possibilities(observations)
             future_rewards = self.learner.predict(possibilties).reshape(observations.shape[0], 4).max(axis=1)
-            discounted_rewards = [self.gamma * (1 - dones[i]) for i in range(self.train_size)] * future_rewards
+            discounted_rewards = self.gamma * (1 - np.array(dones)) * future_rewards
             rewards += discounted_rewards
 
         self.learner.partial_fit(obs_act, rewards)
