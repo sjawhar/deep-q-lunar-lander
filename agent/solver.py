@@ -61,37 +61,43 @@ class LunarLanderSolver(object):
         if np.log(np.random.random_sample()) < self.epsilon:
             return self.env.action_space.sample()
         
-        possibilities = self.get_possibilities(observation.reshape(1, -1))
-        possible_rewards = self.learner.predict(possibilities)
-
-        return np.argmax(possible_rewards)
-    
-    def get_possibilities(self, observations):
-        possibilities = np.zeros((self.env.action_space.n * observations.shape[0], observations.shape[1] + 1))
-        possibilities[:, :-1] = np.repeat(observations, self.env.action_space.n, axis=0)
-        possibilities[:, -1] = np.tile(range(self.env.action_space.n), observations.shape[0])
-        return possibilities
+        possible_rewards = self.learner.predict(observation.reshape(1, -1))
+        return possible_rewards.argmax()
     
     def observe(self, previous_observation, action, observation, reward, done):
-        obs_act = np.append(previous_observation, [action])
-        self.experience.append((obs_act, observation, reward, done))
+        experience = np.concatenate((previous_observation, observation, [action, reward, done]), axis=0)
+        self.experience.append(experience)
   
     def train(self):
         training_set = np.random.choice(len(self.experience), self.train_size, replace=False)
-        obs_act, observations, rewards, dones = [], [], [], []
-        for i in training_set:
-            experience = self.experience[i]
-            obs_act.append(experience[0])
-            observations.append(experience[1])
-            rewards.append(experience[2])
-            dones.append(experience[3])
+        
+        observation_space = self.env.observation_space.shape[0]
+        previous_observations = np.zeros((self.train_size, observation_space))
+        observations = np.copy(previous_observations)
+        actions = np.zeros(self.train_size, dtype=int)
+        rewards = np.zeros(self.train_size)
+        dones = np.zeros(self.train_size)
+        
+        for i in range(self.train_size):
+            experience = training_set[i]
+            previous_observations[i,:] = self.experience[experience][:observation_space]
+            observations[i,:] = self.experience[experience][observation_space:2*observation_space]
+            actions[i] = self.experience[experience][-3]
+            rewards[i] = self.experience[experience][-2]
+            dones[i] = self.experience[experience][-1]
 
-        if self.is_fitted == True:
-            observations = np.array(observations)
-            possibilties = self.get_possibilities(observations)
-            future_rewards = self.learner.predict(possibilties).reshape(observations.shape[0], 4).max(axis=1)
-            discounted_rewards = self.gamma * (1 - np.array(dones)) * future_rewards
-            rewards += discounted_rewards
+        if self.is_fitted == False:
+            targets = np.zeros((self.train_size, self.env.action_space.n))
+            targets[:, actions] = rewards
+            self.learner.fit(previous_observations, targets)
+            self.is_fitted = True
+            return
 
-        self.learner.partial_fit(obs_act, rewards)
-        self.is_fitted = True
+        future_rewards = self.learner.predict(observations).max(axis=1)
+        discounted_rewards = self.gamma * (1 - dones) * future_rewards
+        rewards += discounted_rewards
+        
+        targets = np.nan_to_num(self.learner.predict(previous_observations))
+        targets[:, actions] = rewards
+        self.learner.partial_fit(previous_observations, targets)
+    
