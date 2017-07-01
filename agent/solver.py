@@ -1,77 +1,81 @@
 import numpy as np
-from sklearn.linear_model import SGDRegressor
+from collections import deque
 
 class LunarLanderSolver(object):
-    def __init__(self, env, decay, init_episodes, train_episodes, train_rounds):
+    def __init__(self, env, learner, decay, gamma, init_episodes, train_episodes, train_size, average, experience):
         self.env = env
+        self.learner = learner
+
         self.decay = np.log(decay)
+        self.gamma = float(gamma)
         self.init_episodes = int(init_episodes)
         self.train_episodes = int(train_episodes)
-        self.train_rounds = int(train_rounds)
+        self.train_size = int(train_size)
+        self.average = float(average)
+        self.episode_rewards = deque([], average)
+        self.experience = deque([], experience)
 
-    def solve(self):
-        self.learners = []
-        for action in range(self.env.action_space.n):
-            self.learners.append(SGDRegressor(random_state=1, learning_rate='optimal', warm_start=True))
-            
+    def solve(self, is_record=False):           
         self.epsilon = 0
-        self.observe(self.init_episodes, is_decay=False)
-        self.train()
-        for _ in range(self.train_rounds):
-            self.observe(self.train_episodes, is_decay=True)
-            self.train()
-            print("Done with training set {}".format(_ + 1))
-    
-    def observe(self, episodes, is_decay):
-        observations = episodes * self.env.spec.max_episode_steps
-        self.observations = np.full((observations, 2 + self.env.observation_space.shape[0]), -1)
-        self.observation = 0
-        for _ in range(episodes):
-            self.play_game()
-            if is_decay == True:
-                self.epsilon += self.decay
-            if (_ + 1) % 100 == 0:
-                print("Done with episode {} {}".format(_ + 1, "of init" if is_decay == False else ""))
-
-    def play_game(self):       
-        observation = self.env.reset()
-        for _ in range(self.env.spec.timestep_limit):
-            prev_observation = observation
-            action = self.get_next_action(observation)
-            observation, reward, done, info = self.env.step(action)
-            self.add_result(prev_observation, action, reward)
+        self.is_fitted = False
+        average_reward = 0
+        is_train = False
+        for episode in range(self.init_episodes + self.train_episodes):
+            episode_reward = self.play(is_train)
             
-            if done:
-                break
+            if episode + 1 == self.average:
+                average_reward = sum(self.episode_rewards)/self.average
+            elif episode >= self.average:
+                average_reward += (episode_reward - self.episode_rewards.popleft())/self.average
+                print("Done with episode {}. Average reward: {}".format(episode + 1, average_reward))
+            
+            self.episode_rewards.append(episode_reward)
+
+            if episode >= self.init_episodes:
+                self.epsilon += self.decay
+                is_train = True
+
+    def play(self, is_train):       
+        observation = self.env.reset()
+        reward, total_reward = 0, 0
+        done = False
+        while not done:
+            if is_train == True:
+                self.train()
+
+            action = self.get_next_action(observation, reward, done)
+            previous_observation = observation
+            observation, reward, done, info = self.env.step(action)
+            self.observe(previous_observation, action, observation, reward, done)
+            total_reward += reward
+        return total_reward
         
-    def get_next_action(self, observation):
+    def get_next_action(self, observation, reward, done):
         if np.log(np.random.random_sample()) < self.epsilon:
             return self.env.action_space.sample()
         
-        return self.get_best_action(observation)
+        possibilities = np.zeros((self.env.action_space.n, observation.size + 1))
+        possibilities[:, :-1] = np.repeat(observation.reshape(1, -1), self.env.action_space.n, axis=0)
+        possibilities[:, -1] = range(self.env.action_space.n)
+        possible_rewards = self.learner.predict(possibilities)
 
-    def get_best_action(self, observation):
-        observation = observation.reshape(1, -1)
-        best_action = 0
-        best_reward = self.learners[0].predict(observation)
-        for action in range(1, self.env.action_space.n):
-            reward = self.learners[action].predict(observation)
-            if reward > best_reward:
-                best_reward = reward
-                best_action = action
-
-        return best_action
+        return np.argmax(possible_rewards)
     
-    def add_result(self, observation, action, reward):
-        self.observations[self.observation, :] = np.append(observation, [action, reward])
-        self.observation += 1
-        return
+    def observe(self, previous_observation, action, observation, reward, done):
+        self.experience.append((np.append(previous_observation, action), observation, reward, done))
     
     def train(self):
-        for action in range(self.env.action_space.n):
-            action_data = self.observations[self.observations[:, -2] == action]
-            X, y = action_data[:, :-2], action_data[:, -1]
-            if X.shape[0] > 0:
-                print('learning')
-                self.learners[action].partial_fit(X, y)
+        training_set = np.random.choice(len(self.experience), self.train_size, replace=False)
+        obs_act, observations, rewards, dones = [], [], [], []
+        for i in training_set:
+            experience = self.experience[i]
+            obs_act.append(experience[0])
+            observations.append(experience[1])
+            rewards.append(experience[2])
+            dones.append(experience[3])
 
+        if self.is_fitted == True:
+            discounted_rewards = [self.gamma * (1 - dones[i]) for i in range(self.train_size)] * self.learner.predict(observations).max(axis = 1)
+            rewards += discounted_rewards
+
+        self.learner.fit(obs_act, rewards)
