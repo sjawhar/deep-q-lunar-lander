@@ -1,4 +1,4 @@
-FROM jupyter/scipy-notebook
+FROM jupyter/tensorflow-notebook
 
 USER root
 RUN apt-get update --fix-missing && \

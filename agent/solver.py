@@ -29,7 +29,6 @@ class LunarLanderSolver(object):
 
     def solve(self):           
         self.epsilon = 0
-        self.is_fitted = False
         average_reward = 0
         is_train = False
         for episode in range(self.init_episodes + self.train_episodes):
@@ -74,7 +73,7 @@ class LunarLanderSolver(object):
         observation_space = self.env.observation_space.shape[0]
         previous_observations = np.zeros((self.train_size, observation_space))
         observations = np.copy(previous_observations)
-        actions = np.zeros(self.train_size, dtype=int)
+        actions = np.zeros((self.train_size, self.env.action_space.n))
         rewards = np.zeros(self.train_size)
         dones = np.zeros(self.train_size)
         
@@ -82,22 +81,11 @@ class LunarLanderSolver(object):
             experience = training_set[i]
             previous_observations[i,:] = self.experience[experience][:observation_space]
             observations[i,:] = self.experience[experience][observation_space:2*observation_space]
-            actions[i] = self.experience[experience][-3]
+            actions[i, int(self.experience[experience][-3])] = 1
             rewards[i] = self.experience[experience][-2]
             dones[i] = self.experience[experience][-1]
-
-        if self.is_fitted == False:
-            targets = np.zeros((self.train_size, self.env.action_space.n))
-            targets[:, actions] = rewards
-            self.learner.fit(previous_observations, targets)
-            self.is_fitted = True
-            return
 
         future_rewards = self.learner.predict(observations).max(axis=1)
         discounted_rewards = self.gamma * (1 - dones) * future_rewards
         rewards += discounted_rewards
-        
-        targets = np.nan_to_num(self.learner.predict(previous_observations))
-        targets[:, actions] = rewards
-        self.learner.partial_fit(previous_observations, targets)
-    
+        self.learner.fit(previous_observations, actions, rewards)
