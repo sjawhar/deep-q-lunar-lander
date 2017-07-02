@@ -1,5 +1,5 @@
 import tensorflow as tf
-class CustomMultiOutNN:
+class MultiOutNN:
     
     def __init__(self, layer_sizes, learning_rate_init):
         self.learning_rate_init = learning_rate_init
@@ -9,6 +9,7 @@ class CustomMultiOutNN:
         self.actions = tf.placeholder(tf.float32, shape=[None, layer_sizes[-1]])
         self.rewards = tf.placeholder(tf.float32, shape=[None])
         self.learning_rate = tf.placeholder(tf.float32)
+        self.session = tf.Session()
         
         stddev = 0.1
         mean = 0
@@ -38,13 +39,12 @@ class CustomMultiOutNN:
         loss = tf.reduce_sum(tf.square(tf.subtract(self.rewards, action_predictions)))
         
         self.train = tf.train.AdamOptimizer(self.learning_rate).minimize(loss)
-        self.session = tf.Session()
 
         initializer = tf.global_variables_initializer()
         self.session.run(initializer)
     
-    def activation_function(self, input_value):
-        return tf.maximum(0.01 * input_value, input_value)
+    def activation_function(self, input_values):
+        return tf.maximum(0.01 * input_values, input_values)
             
     def predict(self, observations):
         return self.session.run(

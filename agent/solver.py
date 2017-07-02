@@ -25,6 +25,7 @@ class LunarLanderSolver(object):
         self.train_episodes = int(train_episodes)
         self.train_size = int(train_size)
         self.episode_rewards = deque([], average)
+        self.episode_solved = deque([], average)
         self.experience = deque([], experience)
 
     def solve(self):           
@@ -34,14 +35,17 @@ class LunarLanderSolver(object):
         for episode in range(self.init_episodes + self.train_episodes):
             episode_reward = self.play(is_train)
             self.episode_rewards.append(episode_reward)
+            self.episode_solved.append(episode_reward >= 200)
             average_reward = sum(self.episode_rewards)/len(self.episode_rewards)
-            print("Episode {}: Reward: {}, Average reward: {}".format(episode + 1, episode_reward, average_reward))            
+            print("Episode {} - Reward: {}, Average Reward: {}, Solved: {}".format(
+                episode + 1, episode_reward, average_reward, "Yes" if min(solved) else "No"
+            ))
 
             if episode >= self.init_episodes:
                 self.epsilon = max(self.min_epsilon, self.epsilon + self.epsilon_decay)
                 is_train = True
 
-    def play(self, is_train):       
+    def play(self, is_train=False):       
         observation = self.env.reset()
         reward, total_reward = 0, 0
         done = False
@@ -88,4 +92,5 @@ class LunarLanderSolver(object):
         future_rewards = self.learner.predict(observations).max(axis=1)
         discounted_rewards = self.gamma * (1 - dones) * future_rewards
         rewards += discounted_rewards
+
         self.learner.fit(previous_observations, actions, rewards)
