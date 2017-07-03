@@ -38,14 +38,14 @@ class LunarLanderSolver(object):
             self.episode_solved.append(episode_reward >= 200)
             average_reward = sum(self.episode_rewards)/len(self.episode_rewards)
             print("Episode {} - Reward: {}, Average Reward: {}, Solved: {}".format(
-                episode + 1, episode_reward, average_reward, "Yes" if min(solved) else "No"
+                episode + 1, episode_reward, average_reward, "Yes" if min(self.episode_solved) else "No"
             ))
 
             if episode >= self.init_episodes:
                 self.epsilon = max(self.min_epsilon, self.epsilon + self.epsilon_decay)
                 is_train = True
 
-    def play(self, is_train=False):       
+    def play(self, is_train=False, is_random=True):       
         observation = self.env.reset()
         reward, total_reward = 0, 0
         done = False
@@ -53,15 +53,15 @@ class LunarLanderSolver(object):
             if is_train == True:
                 self.train()
 
-            action = self.get_next_action(observation, reward, done)
+            action = self.get_next_action(observation, reward, done, is_random)
             previous_observation = observation
             observation, reward, done, info = self.env.step(action)
             self.observe(previous_observation, action, observation, reward, done)
             total_reward += reward
         return total_reward
         
-    def get_next_action(self, observation, reward, done):
-        if np.log(np.random.random_sample()) < self.epsilon:
+    def get_next_action(self, observation, reward, done, is_random):
+        if is_random == True and np.log(np.random.random_sample()) < self.epsilon:
             return self.env.action_space.sample()
         
         possible_rewards = self.learner.predict(observation.reshape(1, -1))
@@ -77,7 +77,7 @@ class LunarLanderSolver(object):
         observation_space = self.env.observation_space.shape[0]
         previous_observations = np.zeros((self.train_size, observation_space))
         observations = np.copy(previous_observations)
-        actions = np.zeros((self.train_size, self.env.action_space.n))
+        actions = np.zeros(self.train_size, dtype=int)
         rewards = np.zeros(self.train_size)
         dones = np.zeros(self.train_size)
         
@@ -85,12 +85,14 @@ class LunarLanderSolver(object):
             experience = training_set[i]
             previous_observations[i,:] = self.experience[experience][:observation_space]
             observations[i,:] = self.experience[experience][observation_space:2*observation_space]
-            actions[i, int(self.experience[experience][-3])] = 1
+            actions[i] = self.experience[experience][-3]
             rewards[i] = self.experience[experience][-2]
             dones[i] = self.experience[experience][-1]
 
-        future_rewards = self.learner.predict(observations).max(axis=1)
+        future_rewards = np.nan_to_num(self.learner.predict(observations).max(axis=1))
         discounted_rewards = self.gamma * (1 - dones) * future_rewards
         rewards += discounted_rewards
 
-        self.learner.fit(previous_observations, actions, rewards)
+        targets = np.full((self.train_size, self.env.action_space.n), np.NAN)
+        targets[range(self.train_size), actions] = rewards
+        self.learner.fit(previous_observations, targets)
