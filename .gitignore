@@ -143,3 +143,4 @@ $RECYCLE.BIN/
 .ipython
 .jupyter
 .bash_history
+.keras
