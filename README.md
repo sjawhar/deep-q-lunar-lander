@@ -1,4 +1,4 @@
-Video report available [here](https://youtu.be/TJbQn42VLQ8). Please read the video description for a small correction.
+Video report available [here](https://youtu.be/Gh3jBlLrEo4). Evaluation on OpenAI available [here](https://gym.openai.com/evaluations/eval_f2ZItfucTfe3m77eYgSew#reproducibility).
 
 To launch locally, clone this repo then run this simple command in the project root folder:
 
