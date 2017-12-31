@@ -1,6 +1,6 @@
 def main():
     from solver import LunarLanderSolver
-    from learner_keras import MultiOutNN
+    from learner import MultiOutNN
     import gym
     env = gym.make('LunarLander-v2')
     
