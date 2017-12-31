@@ -1,10 +1,21 @@
-FROM jupyter/tensorflow-notebook
+FROM jupyter/tensorflow-notebook:82b978b3ceeb
 
 USER root
-RUN apt-get update --fix-missing && \
-    apt-get install -y --no-install-recommends cmake zlib1g-dev libjpeg-dev xvfb xorg-dev python-opengl libboost-all-dev libsdl2-dev swig libx11-6 && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+RUN apt-get update \
+ && apt-get install -y \
+        cmake \
+        libboost-all-dev \
+        libjpeg-dev \
+        libsdl2-dev \
+        libx11-6 \
+        python-opengl \
+        swig \
+        xorg-dev \
+        xvfb \
+        zlib1g-dev \
+ && rm -rf /var/apt/lists/*
 
 USER $NB_USER
-RUN pip install gym[all]
+RUN pip3 install \
+        Box2D \
+        gym[all]
